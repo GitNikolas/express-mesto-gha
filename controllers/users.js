@@ -27,6 +27,9 @@ const getUserById = (req, res) => {
       if (err instanceof mongoose.Error.DocumentNotFoundError) {
         return res.status(HTTP_STATUS_NOT_FOUND).send({ message: `Пользователь с указанным id не найден: ${userId}` });
       }
+      if (err instanceof mongoose.Error.CastError) {
+        return res.status(HTTP_STATUS_BAD_REQUEST).send({ message: `Некорректный Id: ${userId}` });
+      }
       return res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).send({ message: `Внутренняя ошибка сервера: ${err.name}` });
     });
 };
