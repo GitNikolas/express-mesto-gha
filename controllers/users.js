@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const SALT_ROUNDS = 10;
-const { JWT_SECRET } = process.env;
+const JWT_SECRET = 'anotherSecretCode';
 
 const mongoose = require('mongoose');
 const userModel = require('../models/user');
