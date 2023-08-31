@@ -68,7 +68,12 @@ const postUser = (req, res, next) => {
           name, about, avatar, email, password: hash,
         }))
         .then((userData) => {
-          res.status(HTTP_STATUS_CREATED).send({ message: `Пользователь ${userData.email} зарегистрирован` });
+          res.status(HTTP_STATUS_CREATED).send({
+            name: userData.name,
+            about: userData.about,
+            avatar: userData.avatar,
+            email: userData.email,
+          });
         })
         .catch((err) => {
           if (err instanceof mongoose.Error.ValidationError) {
