@@ -1,90 +1,147 @@
 const {
-  HTTP_STATUS_BAD_REQUEST, HTTP_STATUS_CREATED,
-  HTTP_STATUS_OK, HTTP_STATUS_INTERNAL_SERVER_ERROR,
-  HTTP_STATUS_NOT_FOUND,
+  HTTP_STATUS_CREATED, HTTP_STATUS_OK,
 } = require('http2').constants;
+require('dotenv').config();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+const SALT_ROUNDS = 10;
+const { JWT_SECRET } = process.env;
+
 const mongoose = require('mongoose');
 const userModel = require('../models/user');
 
-const getUsers = (req, res) => {
+const ConflictError = require('../errors/conflict-error');
+const BadRequestError = require('../errors/bad-request-error');
+const NotFoundError = require('../errors/not-found-error');
+const UnauthorizedError = require('../errors/unauthorized-error');
+
+const getUser = (req, res, next) => {
+  const { _id } = req.user;
+
+  return userModel.findById(_id)
+    .then((response) => {
+      res.status(HTTP_STATUS_OK).send(response);
+    })
+    .catch(next);
+};
+
+const getUsers = (req, res, next) => {
   userModel.find({})
     .then((response) => {
       res.status(HTTP_STATUS_OK).send(response);
     })
-    .catch((err) => {
-      console.log(err.name);
-      return res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).send({ message: `Внутренняя ошибка сервера: ${err.name}` });
-    });
+    .catch(next);
 };
 
-const getUserById = (req, res) => {
+const getUserById = (req, res, next) => {
   const { userId } = req.params;
   return userModel.findById(userId)
     .orFail()
     .then((response) => res.status(HTTP_STATUS_OK).send(response))
     .catch((err) => {
-      console.log(err.name);
       if (err instanceof mongoose.Error.DocumentNotFoundError) {
-        return res.status(HTTP_STATUS_NOT_FOUND).send({ message: `Пользователь с указанным id не найден: ${userId}` });
+        next(new NotFoundError(`Пользователь с указанным id не найден: ${userId}`));
       }
       if (err instanceof mongoose.Error.CastError) {
-        return res.status(HTTP_STATUS_BAD_REQUEST).send({ message: `Некорректный Id: ${userId}` });
+        next(new BadRequestError(`Некорректный Id: ${userId}`));
       }
-      return res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).send({ message: `Внутренняя ошибка сервера: ${err.name}` });
+      return next(err);
     });
 };
 
-const postUser = (req, res) => {
-  const { name, about, avatar } = req.body;
-  return userModel.create({ name, about, avatar })
-    .then((response) => { res.status(HTTP_STATUS_CREATED).send(response); })
-    .catch((err) => {
-      console.log(err.name);
-      if (err instanceof mongoose.Error.ValidationError) {
-        return res.status(HTTP_STATUS_BAD_REQUEST).send({ message: `Некорректные данные: ${err.name}` });
+const postUser = (req, res, next) => {
+  const {
+    name, about, avatar, email, password,
+  } = req.body;
+
+  if (!email || !password) {
+    throw new BadRequestError('Email или пароль не могут быть пустыми');
+  }
+  return userModel.findOne({ email })
+    .then((user) => {
+      if (user) {
+        throw new ConflictError('Пользователь с таким email уже существует');
       }
-      return res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).send({ message: `Внутренняя ошибка сервера: ${err.name}` });
-    });
+      return bcrypt.hash(password, SALT_ROUNDS)
+        .then((hash) => userModel.create({
+          name, about, avatar, email, password: hash,
+        }))
+        .then((userData) => {
+          res.status(HTTP_STATUS_CREATED).send({ message: `Пользователь ${userData.email} зарегистрирован` });
+        })
+        .catch((err) => {
+          if (err instanceof mongoose.Error.ValidationError) {
+            next(new BadRequestError(`Некорректные данные: ${err.name}`));
+          }
+          return next(err);
+        });
+    })
+    .catch(next);
 };
 
-const updateUser = (req, res) => {
+const updateUser = (req, res, next) => {
   const { name, about } = req.body;
+
   return userModel.findByIdAndUpdate(
     req.user._id,
     { name, about },
-    { new: true, runValidators: true, upsert: true },
+    { new: true, runValidators: true },
   )
     .then((response) => res.status(HTTP_STATUS_OK).send(response))
     .catch((err) => {
-      console.log(err.name);
       if (err instanceof mongoose.Error.ValidationError) {
-        return res.status(HTTP_STATUS_BAD_REQUEST).send({ message: `Некорректные данные: ${err.name}` });
+        next(new BadRequestError(`Некорректные данные: ${err.name}`));
       }
-      return res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).send({ message: `Внутренняя ошибка сервера: ${err.name}` });
+      return next(err);
     });
 };
 
-const updateAvatar = (req, res) => {
+const updateAvatar = (req, res, next) => {
   const { avatar } = req.body;
   return userModel.findByIdAndUpdate(
     req.user._id,
     { avatar },
-    { new: true, runValidators: true, upsert: true },
+    { new: true, runValidators: true },
   )
     .then((response) => { res.status(HTTP_STATUS_OK).send(response); })
     .catch((err) => {
-      console.log(err.name);
       if (err instanceof mongoose.Error.ValidationError) {
-        return res.status(HTTP_STATUS_BAD_REQUEST).send({ message: `Некорректные данные: ${err.name}` });
+        next(new BadRequestError(`Некорректные данные: ${err.name}`));
       }
-      return res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).send({ message: `Внутренняя ошибка сервера: ${err.name}` });
+      return next(err);
     });
 };
 
+const login = (req, res, next) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    throw new BadRequestError('Email или пароль не могут быть пустыми');
+  }
+  return userModel.findOne({ email }).select('+password')
+    .then((user) => {
+      if (!user) {
+        throw new UnauthorizedError('Неправильные почта или пароль');
+      }
+      return bcrypt.compare(password, user.password, (error, isValid) => {
+        if (isValid) {
+          const token = jwt.sign({ _id: user._id }, JWT_SECRET);
+          return res.status(HTTP_STATUS_OK).send({ JWT: token });
+        }
+        return next(new UnauthorizedError('Неправильные почта или пароль'));
+      });
+    })
+    .catch(next);
+};
+
 module.exports = {
+  getUser,
   getUsers,
   getUserById,
   postUser,
   updateUser,
   updateAvatar,
+  login,
+  JWT_SECRET,
 };

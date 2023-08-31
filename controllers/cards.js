@@ -1,53 +1,61 @@
 const {
-  HTTP_STATUS_BAD_REQUEST, HTTP_STATUS_CREATED,
-  HTTP_STATUS_OK, HTTP_STATUS_INTERNAL_SERVER_ERROR,
-  HTTP_STATUS_NOT_FOUND,
+  HTTP_STATUS_CREATED, HTTP_STATUS_OK,
 } = require('http2').constants;
 const mongoose = require('mongoose');
 const cardModel = require('../models/card');
 
-const postCard = (req, res) => {
+const NotFoundError = require('../errors/not-found-error');
+const BadRequestError = require('../errors/bad-request-error');
+const ForbiddenError = require('../errors/forbidden-error');
+
+const postCard = (req, res, next) => {
   const { name, link } = req.body;
-  return cardModel.create({ name, link, owner: req.user._id })
+  const { _id } = req.user;
+
+  return cardModel.create({ name, link, owner: _id })
     .then((response) => { res.status(HTTP_STATUS_CREATED).send(response); })
     .catch((err) => {
-      console.log(err.name);
       if (err instanceof mongoose.Error.ValidationError) {
-        return res.status(HTTP_STATUS_BAD_REQUEST).send({ message: `Некорректные данные: ${err.name}` });
+        next(new BadRequestError(`Некорректные данные: ${err.name}`));
       }
-      return res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).send({ message: `Внутренняя ошибка сервера: ${err.name}` });
+      return next(err);
     });
 };
 
-const getCards = (req, res) => {
+const getCards = (req, res, next) => {
   cardModel.find({})
     .then((response) => {
       res.status(HTTP_STATUS_OK).send(response);
     })
-    .catch((err) => {
-      console.log(err.name);
-      return res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).send({ message: `Внутренняя ошибка сервера: ${err.name}` });
-    });
+    .catch(next);
 };
 
-const deleteCardById = (req, res) => {
+const deleteCardById = (req, res, next) => {
   const { cardId } = req.params;
-  return cardModel.findByIdAndRemove(cardId)
+  const { _id } = req.user;
+
+  return cardModel.findById(cardId)
     .orFail()
-    .then((response) => res.status(HTTP_STATUS_OK).send(response))
+    .then((card) => {
+      const ownerId = card.owner.toString();
+      if (ownerId !== _id) {
+        throw new ForbiddenError('У вас недостаточно прав');
+      }
+      card.deleteOne();
+      return res.status(HTTP_STATUS_OK).send(card);
+    })
     .catch((err) => {
-      console.log(err.name);
       if (err instanceof mongoose.Error.CastError) {
-        return res.status(HTTP_STATUS_BAD_REQUEST).send({ message: `Некорректный id: ${cardId}` });
+        next(new BadRequestError(`Некорректный id: ${cardId}`));
       }
       if (err instanceof mongoose.Error.DocumentNotFoundError) {
-        return res.status(HTTP_STATUS_NOT_FOUND).send({ message: `Карточка с указанным id не найдена: ${cardId}` });
+        next(new NotFoundError(`Карточка с указанным id не найдена: ${cardId}`));
       }
-      return res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).send({ message: `Внутренняя ошибка сервера: ${err.name}` });
+      return next(err);
     });
 };
 
-const putCardLike = (req, res) => {
+const putCardLike = (req, res, next) => {
   const { cardId } = req.params;
   cardModel.findByIdAndUpdate(
     req.params.cardId,
@@ -57,18 +65,17 @@ const putCardLike = (req, res) => {
     .orFail()
     .then((response) => res.status(HTTP_STATUS_OK).send(response))
     .catch((err) => {
-      console.log(mongoose.Error);
       if (err instanceof mongoose.Error.CastError) {
-        return res.status(HTTP_STATUS_BAD_REQUEST).send({ message: `Некорректный id: ${cardId}` });
+        next(new BadRequestError(`Некорректный id: ${cardId}`));
       }
       if (err instanceof mongoose.Error.DocumentNotFoundError) {
-        return res.status(HTTP_STATUS_NOT_FOUND).send({ message: `Карточка с указанным id не найдена: ${cardId}` });
+        next(new NotFoundError(`Карточка с указанным id не найдена: ${cardId}`));
       }
-      return res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).send({ message: `Внутренняя ошибка сервера: ${err.name}` });
+      return next(err);
     });
 };
 
-const deleteCardLike = (req, res) => {
+const deleteCardLike = (req, res, next) => {
   const { cardId } = req.params;
   cardModel.findByIdAndUpdate(
     req.params.cardId,
@@ -78,14 +85,13 @@ const deleteCardLike = (req, res) => {
     .orFail()
     .then((response) => res.status(HTTP_STATUS_OK).send(response))
     .catch((err) => {
-      console.log(mongoose.Error);
       if (err instanceof mongoose.Error.CastError) {
-        return res.status(HTTP_STATUS_BAD_REQUEST).send({ message: `Некорректный id: ${cardId}` });
+        next(new BadRequestError(`Некорректный id: ${cardId}`));
       }
       if (err instanceof mongoose.Error.DocumentNotFoundError) {
-        return res.status(HTTP_STATUS_NOT_FOUND).send({ message: `Карточка с указанным id не найдена: ${cardId}` });
+        next(new NotFoundError(`Карточка с указанным id не найдена: ${cardId}`));
       }
-      return res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).send({ message: `Внутренняя ошибка сервера: ${err.name}` });
+      next(err);
     });
 };
 

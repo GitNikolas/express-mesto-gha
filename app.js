@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 require('dotenv').config();
+const { errors } = require('celebrate');
 const router = require('./routes');
 
 const { PORT = 3000, DB_URL = 'mongodb://localhost:27017/mestodb' } = process.env;
@@ -13,14 +14,22 @@ const app = express();
 
 app.use(express.json());
 
-app.use((req, res, next) => {
-  req.user = {
-    _id: '64db4aee6b8e063717eaeab2',
-  };
+app.use(router);
+
+app.use(errors());
+
+app.use((err, req, res, next) => {
+  const { statusCode = 500, message } = err;
+
+  res
+    .status(statusCode)
+    .send({
+      message: statusCode === 500
+        ? 'На сервере произошла ошибка'
+        : message,
+    });
   next();
 });
-
-app.use(router);
 
 app.listen(PORT, () => {
   console.log(`App listening on port ${PORT}`);
