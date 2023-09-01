@@ -5,8 +5,8 @@ require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-const SALT_ROUNDS = 10;
-const JWT_SECRET = 'anotherSecretCode';
+const { SALT_ROUNDS = 10 } = process.env;
+const { JWT_SECRET = 'testSecretCode' } = process.env;
 
 const mongoose = require('mongoose');
 const userModel = require('../models/user');
@@ -41,10 +41,10 @@ const getUserById = (req, res, next) => {
     .then((response) => res.status(HTTP_STATUS_OK).send(response))
     .catch((err) => {
       if (err instanceof mongoose.Error.DocumentNotFoundError) {
-        next(new NotFoundError(`Пользователь с указанным id не найден: ${userId}`));
+        return next(new NotFoundError(`Пользователь с указанным id не найден: ${userId}`));
       }
       if (err instanceof mongoose.Error.CastError) {
-        next(new BadRequestError(`Некорректный Id: ${userId}`));
+        return next(new BadRequestError(`Некорректный Id: ${userId}`));
       }
       return next(err);
     });
@@ -55,34 +55,27 @@ const postUser = (req, res, next) => {
     name, about, avatar, email, password,
   } = req.body;
 
-  if (!email || !password) {
-    throw new BadRequestError('Email или пароль не могут быть пустыми');
-  }
-  return userModel.findOne({ email })
-    .then((user) => {
-      if (user) {
-        throw new ConflictError('Пользователь с таким email уже существует');
-      }
-      return bcrypt.hash(password, SALT_ROUNDS)
-        .then((hash) => userModel.create({
-          name, about, avatar, email, password: hash,
-        }))
-        .then((userData) => {
-          res.status(HTTP_STATUS_CREATED).send({
-            name: userData.name,
-            about: userData.about,
-            avatar: userData.avatar,
-            email: userData.email,
-          });
-        })
-        .catch((err) => {
-          if (err instanceof mongoose.Error.ValidationError) {
-            next(new BadRequestError(`Некорректные данные: ${err.name}`));
-          }
-          return next(err);
-        });
+  return bcrypt.hash(password, SALT_ROUNDS)
+    .then((hash) => userModel.create({
+      name, about, avatar, email, password: hash,
+    }))
+    .then((userData) => {
+      res.status(HTTP_STATUS_CREATED).send({
+        name: userData.name,
+        about: userData.about,
+        avatar: userData.avatar,
+        email: userData.email,
+      });
     })
-    .catch(next);
+    .catch((err) => {
+      if (err.code === 11000) {
+        return next(new ConflictError('Пользователь с таким email уже существует'));
+      }
+      if (err instanceof mongoose.Error.ValidationError) {
+        return next(new BadRequestError(`Некорректные данные: ${err.name}`));
+      }
+      return next(err);
+    });
 };
 
 const updateUser = (req, res, next) => {
@@ -121,9 +114,6 @@ const updateAvatar = (req, res, next) => {
 const login = (req, res, next) => {
   const { email, password } = req.body;
 
-  if (!email || !password) {
-    throw new BadRequestError('Email или пароль не могут быть пустыми');
-  }
   return userModel.findOne({ email }).select('+password')
     .then((user) => {
       if (!user) {

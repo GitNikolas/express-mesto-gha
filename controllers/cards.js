@@ -41,9 +41,9 @@ const deleteCardById = (req, res, next) => {
       if (ownerId !== _id) {
         throw new ForbiddenError('У вас недостаточно прав');
       }
-      card.deleteOne();
-      return res.status(HTTP_STATUS_OK).send(card);
+      return card.deleteOne();
     })
+    .then((cardData) => res.status(HTTP_STATUS_OK).send(cardData))
     .catch((err) => {
       if (err instanceof mongoose.Error.CastError) {
         next(new BadRequestError(`Некорректный id: ${cardId}`));
