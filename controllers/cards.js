@@ -46,10 +46,10 @@ const deleteCardById = (req, res, next) => {
     .then((cardData) => res.status(HTTP_STATUS_OK).send(cardData))
     .catch((err) => {
       if (err instanceof mongoose.Error.CastError) {
-        next(new BadRequestError(`Некорректный id: ${cardId}`));
+        return next(new BadRequestError(`Некорректный id: ${cardId}`));
       }
       if (err instanceof mongoose.Error.DocumentNotFoundError) {
-        next(new NotFoundError(`Карточка с указанным id не найдена: ${cardId}`));
+        return next(new NotFoundError(`Карточка с указанным id не найдена: ${cardId}`));
       }
       return next(err);
     });
@@ -66,10 +66,10 @@ const putCardLike = (req, res, next) => {
     .then((response) => res.status(HTTP_STATUS_OK).send(response))
     .catch((err) => {
       if (err instanceof mongoose.Error.CastError) {
-        next(new BadRequestError(`Некорректный id: ${cardId}`));
+        return next(new BadRequestError(`Некорректный id: ${cardId}`));
       }
       if (err instanceof mongoose.Error.DocumentNotFoundError) {
-        next(new NotFoundError(`Карточка с указанным id не найдена: ${cardId}`));
+        return next(new NotFoundError(`Карточка с указанным id не найдена: ${cardId}`));
       }
       return next(err);
     });
@@ -86,12 +86,12 @@ const deleteCardLike = (req, res, next) => {
     .then((response) => res.status(HTTP_STATUS_OK).send(response))
     .catch((err) => {
       if (err instanceof mongoose.Error.CastError) {
-        next(new BadRequestError(`Некорректный id: ${cardId}`));
+        return next(new BadRequestError(`Некорректный id: ${cardId}`));
       }
       if (err instanceof mongoose.Error.DocumentNotFoundError) {
-        next(new NotFoundError(`Карточка с указанным id не найдена: ${cardId}`));
+        return next(new NotFoundError(`Карточка с указанным id не найдена: ${cardId}`));
       }
-      next(err);
+      return next(err);
     });
 };
 

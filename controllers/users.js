@@ -89,7 +89,7 @@ const updateUser = (req, res, next) => {
     .then((response) => res.status(HTTP_STATUS_OK).send(response))
     .catch((err) => {
       if (err instanceof mongoose.Error.ValidationError) {
-        next(new BadRequestError(`Некорректные данные: ${err.name}`));
+        return next(new BadRequestError(`Некорректные данные: ${err.name}`));
       }
       return next(err);
     });
@@ -105,7 +105,7 @@ const updateAvatar = (req, res, next) => {
     .then((response) => { res.status(HTTP_STATUS_OK).send(response); })
     .catch((err) => {
       if (err instanceof mongoose.Error.ValidationError) {
-        next(new BadRequestError(`Некорректные данные: ${err.name}`));
+        return next(new BadRequestError(`Некорректные данные: ${err.name}`));
       }
       return next(err);
     });
